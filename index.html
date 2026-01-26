@@ -60,19 +60,31 @@
                         <span class="value" id="total-chapters">0</span>
                     </div>
                     <div class="summary-item">
-                        <span class="label">Reading Time</span>
-                        <span class="value" id="reading-time">0m</span>
+                        <span class="label" id="reading-time-label">Reading Time (250 wpm)</span>
+                        <button class="value value-button" id="reading-time" type="button"
+                            aria-label="Adjust words per minute">0m</button>
+                        <div class="wpm-control hidden" id="wpm-control">
+                            <label for="wpm-input">WPM</label>
+                            <input type="number" id="wpm-input" min="100" max="1000" step="10" value="250">
+                            <button id="wpm-apply" class="btn-link" type="button">Apply</button>
+                        </div>
                     </div>
                 </div>
 
                 <div class="details-container">
-                    <h3>Chapter Breakdown</h3>
+                    <div class="details-header">
+                        <h3>Chapter Breakdown</h3>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="running-toggle">
+                            <span class="toggle-text">Running totals</span>
+                        </label>
+                    </div>
                     <div class="table-wrapper">
                         <table class="results-table">
                             <thead>
                                 <tr>
                                     <th>Chapter</th>
-                                    <th class="text-right">Word Count</th>
+                                    <th class="text-right" id="count-header">Word Count</th>
                                     <th class="text-right">% of Total</th>
                                 </tr>
                             </thead>

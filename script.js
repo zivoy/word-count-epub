@@ -8,6 +8,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusText = document.getElementById('status-text');
     const resultsBody = document.getElementById('results-body');
     const resetBtn = document.getElementById('reset-btn');
+    const runningToggle = document.getElementById('running-toggle');
+    const countHeader = document.getElementById('count-header');
+    const readingTimeEl = document.getElementById('reading-time');
+    const readingTimeLabel = document.getElementById('reading-time-label');
+    const wpmControl = document.getElementById('wpm-control');
+    const wpmInput = document.getElementById('wpm-input');
+    const wpmApply = document.getElementById('wpm-apply');
+
+    let currentResults = null;
+    let wpm = 250;
+    let showRunningTotals = false;
 
     // Drag and Drop handlers
     dropZone.addEventListener('click', () => fileInput.click());
@@ -37,6 +48,37 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     resetBtn.addEventListener('click', resetApp);
+    runningToggle.addEventListener('change', () => {
+        showRunningTotals = runningToggle.checked;
+        if (currentResults) {
+            renderTable(currentResults);
+        }
+    });
+
+    readingTimeEl.addEventListener('click', () => {
+        wpmControl.classList.toggle('hidden');
+        if (!wpmControl.classList.contains('hidden')) {
+            wpmInput.focus();
+            wpmInput.select();
+        }
+    });
+
+    wpmApply.addEventListener('click', () => {
+        const nextValue = Number.parseInt(wpmInput.value, 10);
+        if (!Number.isFinite(nextValue) || nextValue <= 0) {
+            return;
+        }
+        wpm = Math.min(Math.max(nextValue, 100), 1000);
+        wpmInput.value = wpm;
+        updateReadingTime();
+        wpmControl.classList.add('hidden');
+    });
+
+    wpmInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            wpmApply.click();
+        }
+    });
 
     function resetApp() {
         fileInput.value = '';
@@ -44,6 +86,10 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadSection.classList.remove('hidden');
         progressBar.style.width = '0%';
         resultsBody.innerHTML = '';
+        currentResults = null;
+        showRunningTotals = false;
+        runningToggle.checked = false;
+        wpmControl.classList.add('hidden');
     }
 
     window.handleFile = handleFile;
@@ -76,31 +122,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayResults(results) {
+        currentResults = results;
         resultsSection.classList.remove('hidden');
 
         // Animate numbers
         animateValue('total-words', 0, results.totalWords, 1000);
         animateValue('total-chapters', 0, results.chapters.length, 1000);
 
-        // Calculate reading time (avg 250 wpm)
-        const minutes = Math.ceil(results.totalWords / 250);
+        updateReadingTime();
+        renderTable(results);
+    }
+
+    function updateReadingTime() {
+        if (!currentResults) return;
+        const minutes = Math.ceil(currentResults.totalWords / wpm);
         const hours = Math.floor(minutes / 60);
         const remainingMinutes = minutes % 60;
         let timeString = `${minutes}m`;
         if (hours > 0) {
             timeString = `${hours}h ${remainingMinutes}m`;
         }
-        document.getElementById('reading-time').textContent = timeString;
+        readingTimeEl.textContent = timeString;
+        readingTimeLabel.textContent = `Reading Time (${wpm} wpm)`;
+    }
 
-        // Populate table
+    function renderTable(results) {
         resultsBody.innerHTML = '';
+        countHeader.textContent = showRunningTotals ? 'Running Total' : 'Word Count';
+        let runningTotal = 0;
+
         results.chapters.forEach(chapter => {
+            runningTotal += chapter.wordCount;
+            const displayCount = showRunningTotals ? runningTotal : chapter.wordCount;
+            const percentage = ((displayCount / results.totalWords) * 100).toFixed(1);
             const tr = document.createElement('tr');
-            const percentage = ((chapter.wordCount / results.totalWords) * 100).toFixed(1);
 
             tr.innerHTML = `
                 <td>${chapter.title}</td>
-                <td class="text-right">${chapter.wordCount.toLocaleString()}</td>
+                <td class="text-right">${displayCount.toLocaleString()}</td>
                 <td class="text-right">${percentage}%</td>
             `;
             resultsBody.appendChild(tr);
@@ -148,7 +207,7 @@ class EPubParser {
             try {
                 const tocPath = this.resolvePath(opfPath, manifest[tocId].href);
                 const tocContent = await this.zip.file(tocPath).async('text');
-                tocMap = this.parseToc(tocContent);
+                tocMap = this.parseToc(tocContent, tocPath);
             } catch (e) {
                 console.warn('Could not parse TOC', e);
             }
@@ -170,7 +229,8 @@ class EPubParser {
                 const wordCount = this.countWordsInHtml(content);
 
                 // Determine title
-                let title = tocMap[item.href] || `Chapter ${i + 1}`;
+                const normalizedPath = this.normalizePath(itemPath);
+                let title = tocMap[normalizedPath] || `Chapter ${i + 1}`;
 
                 // Simple heuristic: if word count is very low, it might be front matter or blank page
                 // But we include everything for now as per requirement "details chapter-by-chapter"
@@ -248,33 +308,48 @@ class EPubParser {
         return stack.join('/');
     }
 
-    parseToc(tocContent) {
+    parseToc(tocContent, tocPath) {
         const parser = new DOMParser();
-        const doc = parser.parseFromString(tocContent, 'application/xml');
         const map = {};
 
         // Handle NCX (EPUB 2)
-        const navPoints = Array.from(doc.getElementsByTagName('navPoint'));
+        const ncxDoc = parser.parseFromString(tocContent, 'application/xml');
+        const navPoints = Array.from(ncxDoc.getElementsByTagName('navPoint'));
         if (navPoints.length > 0) {
             navPoints.forEach(point => {
-                const label = point.querySelector('navLabel > text').textContent;
-                let src = point.querySelector('content').getAttribute('src');
-                // Remove anchor if present
+                const labelNode = point.querySelector('navLabel > text');
+                const contentNode = point.querySelector('content');
+                if (!labelNode || !contentNode) return;
+                let src = contentNode.getAttribute('src') || '';
                 src = src.split('#')[0];
-                map[src] = label;
+                const resolved = this.resolvePath(tocPath, src);
+                map[this.normalizePath(resolved)] = labelNode.textContent.trim();
             });
             return map;
         }
 
         // Handle HTML Nav (EPUB 3) - simplified
-        const anchors = Array.from(doc.querySelectorAll('nav[epub\\:type="toc"] a, nav[role="doc-toc"] a'));
+        const navDoc = parser.parseFromString(tocContent, 'text/html');
+        const anchors = Array.from(navDoc.querySelectorAll('nav[epub\\:type="toc"] a, nav[role="doc-toc"] a, nav[epub\\:type="toc"] li a'));
         anchors.forEach(a => {
-            let href = a.getAttribute('href');
+            let href = a.getAttribute('href') || '';
             href = href.split('#')[0];
-            map[href] = a.textContent.trim();
+            if (!href) return;
+            const resolved = this.resolvePath(tocPath, href);
+            map[this.normalizePath(resolved)] = a.textContent.trim();
         });
 
         return map;
+    }
+
+    normalizePath(path) {
+        let normalized = path.replace(/\\/g, '/');
+        try {
+            normalized = decodeURIComponent(normalized);
+        } catch (e) {
+            // ignore decode errors
+        }
+        return normalized.replace(/\/+/g, '/');
     }
 
     countWordsInHtml(htmlContent) {
