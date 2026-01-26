@@ -1,6 +1,10 @@
 ## Word Counter for epubs
 
-Counts words in epub (ebook) files in your browser.
+Counts words in epub (ebook) files. Runs in your browser. Doesn't upload your book anywhere. 
+
+Start by select an epub file to word count at: 
+
+https://pengowray.github.io/word-count-epub/ 
 
 ### Thanks 
 
