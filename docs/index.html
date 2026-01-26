@@ -74,10 +74,16 @@
                 <div class="details-container">
                     <div class="details-header">
                         <h3>Chapter Breakdown</h3>
-                        <label class="toggle-label">
-                            <input type="checkbox" id="running-toggle">
-                            <span class="toggle-text">Running totals</span>
-                        </label>
+                        <div class="toggle-group">
+                            <label class="toggle-label">
+                                <input type="checkbox" id="running-toggle">
+                                <span class="toggle-text">Running totals</span>
+                            </label>
+                            <label class="toggle-label hidden" id="extras-toggle-wrapper">
+                                <input type="checkbox" id="extras-toggle">
+                                <span class="toggle-text">Include non-TOC items</span>
+                            </label>
+                        </div>
                     </div>
                     <div class="table-wrapper">
                         <table class="results-table">
@@ -100,7 +106,7 @@
         </main>
 
         <footer>
-            <p>Built with privacy in mind.</p>
+            <p>Made by Pengo Wray. <a href="https://github.com/pengowray/word-count-epub">View the repo</a>.</p>
         </footer>
     </div>
     <script src="script.js"></script>

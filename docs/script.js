@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsBody = document.getElementById('results-body');
     const resetBtn = document.getElementById('reset-btn');
     const runningToggle = document.getElementById('running-toggle');
+    const extrasToggleWrapper = document.getElementById('extras-toggle-wrapper');
+    const extrasToggle = document.getElementById('extras-toggle');
     const countHeader = document.getElementById('count-header');
     const readingTimeEl = document.getElementById('reading-time');
     const readingTimeLabel = document.getElementById('reading-time-label');
@@ -16,9 +18,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const wpmInput = document.getElementById('wpm-input');
     const wpmApply = document.getElementById('wpm-apply');
 
+    let baseResults = null;
     let currentResults = null;
     let wpm = 250;
     let showRunningTotals = false;
+    let includeExtras = false;
 
     // Drag and Drop handlers
     dropZone.addEventListener('click', () => fileInput.click());
@@ -55,6 +59,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    extrasToggle.addEventListener('change', () => {
+        includeExtras = extrasToggle.checked;
+        refreshResultsView(false);
+    });
+
     readingTimeEl.addEventListener('click', () => {
         wpmControl.classList.toggle('hidden');
         if (!wpmControl.classList.contains('hidden')) {
@@ -86,10 +95,14 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadSection.classList.remove('hidden');
         progressBar.style.width = '0%';
         resultsBody.innerHTML = '';
+        baseResults = null;
         currentResults = null;
         showRunningTotals = false;
         runningToggle.checked = false;
         wpmControl.classList.add('hidden');
+        includeExtras = false;
+        extrasToggle.checked = false;
+        extrasToggleWrapper.classList.add('hidden');
     }
 
     window.handleFile = handleFile;
@@ -122,15 +135,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayResults(results) {
-        currentResults = results;
+        baseResults = results;
+        includeExtras = !results.tocAvailable;
+        extrasToggle.checked = includeExtras;
+        if (results.tocAvailable && results.hasNonTocItems) {
+            extrasToggleWrapper.classList.remove('hidden');
+        } else {
+            extrasToggleWrapper.classList.add('hidden');
+        }
         resultsSection.classList.remove('hidden');
+        refreshResultsView(true);
+    }
 
-        // Animate numbers
-        animateValue('total-words', 0, results.totalWords, 1000);
-        animateValue('total-chapters', 0, results.chapters.length, 1000);
-
+    function refreshResultsView(animate) {
+        currentResults = getActiveResults();
+        if (!currentResults) return;
+        updateSummary(currentResults, animate);
         updateReadingTime();
-        renderTable(results);
+        renderTable(currentResults);
+    }
+
+    function getActiveResults() {
+        if (!baseResults) return null;
+        if (!baseResults.tocAvailable || !includeExtras) {
+            return baseResults;
+        }
+        return {
+            ...baseResults,
+            chapters: baseResults.chaptersAll,
+            totalWords: baseResults.totalWordsAll
+        };
+    }
+
+    function updateSummary(results, animate) {
+        if (animate) {
+            animateValue('total-words', 0, results.totalWords, 1000);
+            animateValue('total-chapters', 0, results.chapters.length, 1000);
+            return;
+        }
+        document.getElementById('total-words').textContent = results.totalWords.toLocaleString();
+        document.getElementById('total-chapters').textContent = results.chapters.length.toLocaleString();
     }
 
     function updateReadingTime() {
@@ -203,11 +247,14 @@ class EPubParser {
 
         // Try to get chapter titles from TOC if available
         let tocMap = {};
+        let tocOrder = [];
         if (tocId && manifest[tocId]) {
             try {
                 const tocPath = this.resolvePath(opfPath, manifest[tocId].href);
                 const tocContent = await this.zip.file(tocPath).async('text');
-                tocMap = this.parseToc(tocContent, tocPath);
+                const tocData = this.parseToc(tocContent, tocPath);
+                tocMap = tocData.map;
+                tocOrder = tocData.order;
             } catch (e) {
                 console.warn('Could not parse TOC', e);
             }
@@ -215,6 +262,8 @@ class EPubParser {
 
         onProgress(30, 'Counting words...');
         const totalItems = spine.length;
+        const spineMap = new Map();
+        const spineOrder = [];
 
         for (let i = 0; i < totalItems; i++) {
             const itemId = spine[i];
@@ -222,32 +271,59 @@ class EPubParser {
             if (!item) continue;
 
             const itemPath = this.resolvePath(opfPath, item.href);
+            const normalizedPath = this.normalizePath(itemPath);
             const file = this.zip.file(itemPath);
 
             if (file) {
                 const content = await file.async('text');
                 const wordCount = this.countWordsInHtml(content);
+                const title = tocMap[normalizedPath] || `Chapter ${i + 1}`;
 
-                // Determine title
-                const normalizedPath = this.normalizePath(itemPath);
-                let title = tocMap[normalizedPath] || `Chapter ${i + 1}`;
-
-                // Simple heuristic: if word count is very low, it might be front matter or blank page
-                // But we include everything for now as per requirement "details chapter-by-chapter"
-
-                if (wordCount > 0) {
-                    this.results.chapters.push({
-                        title: title,
-                        wordCount: wordCount,
-                        href: item.href
-                    });
-                    this.results.totalWords += wordCount;
-                }
+                spineMap.set(normalizedPath, {
+                    title,
+                    wordCount,
+                    href: item.href
+                });
+                spineOrder.push(normalizedPath);
             }
 
             const percent = 30 + Math.floor(((i + 1) / totalItems) * 70);
             onProgress(percent, `Analyzing chapter ${i + 1} of ${totalItems}...`);
         }
+
+        const tocChapters = [];
+        const allChapters = [];
+        const included = new Set();
+
+        if (tocOrder.length > 0) {
+            tocOrder.forEach(path => {
+                const chapter = spineMap.get(path);
+                if (!chapter || chapter.wordCount <= 0 || included.has(path)) return;
+                tocChapters.push(chapter);
+                allChapters.push(chapter);
+                included.add(path);
+            });
+        }
+
+        spineOrder.forEach(path => {
+            if (included.has(path)) return;
+            const chapter = spineMap.get(path);
+            if (!chapter || chapter.wordCount <= 0) return;
+            allChapters.push(chapter);
+        });
+
+        const totalWordsToc = tocChapters.reduce((sum, chapter) => sum + chapter.wordCount, 0);
+        const totalWordsAll = allChapters.reduce((sum, chapter) => sum + chapter.wordCount, 0);
+        const tocAvailable = tocOrder.length > 0;
+
+        this.results = {
+            totalWords: tocAvailable ? totalWordsToc : totalWordsAll,
+            totalWordsAll,
+            chapters: tocAvailable ? tocChapters : allChapters,
+            chaptersAll: allChapters,
+            tocAvailable,
+            hasNonTocItems: tocAvailable && allChapters.length > tocChapters.length
+        };
 
         onProgress(100, 'Done!');
     }
@@ -311,6 +387,7 @@ class EPubParser {
     parseToc(tocContent, tocPath) {
         const parser = new DOMParser();
         const map = {};
+        const order = [];
 
         // Handle NCX (EPUB 2)
         const ncxDoc = parser.parseFromString(tocContent, 'application/xml');
@@ -323,9 +400,11 @@ class EPubParser {
                 let src = contentNode.getAttribute('src') || '';
                 src = src.split('#')[0];
                 const resolved = this.resolvePath(tocPath, src);
-                map[this.normalizePath(resolved)] = labelNode.textContent.trim();
+                const normalized = this.normalizePath(resolved);
+                map[normalized] = labelNode.textContent.trim();
+                order.push(normalized);
             });
-            return map;
+            return { map, order };
         }
 
         // Handle HTML Nav (EPUB 3) - simplified
@@ -336,10 +415,12 @@ class EPubParser {
             href = href.split('#')[0];
             if (!href) return;
             const resolved = this.resolvePath(tocPath, href);
-            map[this.normalizePath(resolved)] = a.textContent.trim();
+            const normalized = this.normalizePath(resolved);
+            map[normalized] = a.textContent.trim();
+            order.push(normalized);
         });
 
-        return map;
+        return { map, order };
     }
 
     normalizePath(path) {

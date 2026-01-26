@@ -221,6 +221,13 @@ h1 {
     margin-bottom: 1rem;
 }
 
+.toggle-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
 .toggle-label {
     display: inline-flex;
     align-items: center;
