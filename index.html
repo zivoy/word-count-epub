@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPUB Word Counter</title>
+    <meta name="description"
+        content="Fast, local, and secure EPUB word counter. Analyze your books chapter by chapter without uploading files.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="jszip.min.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>EPUB Word Counter</h1>
+            <p class="subtitle">Secure, local word count analysis for your ebooks.</p>
+        </header>
+
+        <main>
+            <section class="upload-section" id="upload-section">
+                <div class="drop-zone" id="drop-zone">
+                    <div class="icon-container">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                            class="feather feather-book-open">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                        </svg>
+                    </div>
+                    <h2>Drag & Drop your EPUB here</h2>
+                    <p>or click to browse files</p>
+                    <input type="file" id="file-input" accept=".epub" hidden>
+                </div>
+                <p class="privacy-note">Files are processed locally in your browser. Nothing is uploaded.</p>
+            </section>
+
+            <section class="processing-section hidden" id="processing-section">
+                <div class="loader-container">
+                    <div class="spinner"></div>
+                    <p id="status-text">Reading file...</p>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+            </section>
+
+            <section class="results-section hidden" id="results-section">
+                <div class="summary-card">
+                    <div class="summary-item">
+                        <span class="label">Total Words</span>
+                        <span class="value" id="total-words">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Chapters</span>
+                        <span class="value" id="total-chapters">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label" id="reading-time-label">Reading Time (250 wpm)</span>
+                        <button class="value value-button" id="reading-time" type="button"
+                            aria-label="Adjust words per minute">0m</button>
+                        <div class="wpm-control hidden" id="wpm-control">
+                            <label for="wpm-input">WPM</label>
+                            <input type="number" id="wpm-input" min="100" max="1000" step="10" value="250">
+                            <button id="wpm-apply" class="btn-link" type="button">Apply</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="details-container">
+                    <div class="details-header">
+                        <h3>Chapter Breakdown</h3>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="running-toggle">
+                            <span class="toggle-text">Running totals</span>
+                        </label>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Chapter</th>
+                                    <th class="text-right" id="count-header">Word Count</th>
+                                    <th class="text-right">% of Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-body">
+                                <!-- Rows will be injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <button id="reset-btn" class="btn-secondary">Analyze Another Book</button>
+            </section>
+        </main>
+
+        <footer>
+            <p>Made by Pengo Wray. <a href="https://github.com/pengowray/word-count-epub">View the repo</a>.</p>
+        </footer>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>
