@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPUB Word Counter - Test Runner</title>
+    <meta name="description"
+        content="Fast, local, and secure EPUB word counter. Analyze your books chapter by chapter without uploading files.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+        integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwWWfok1VC_ePr9hHd0/tr1oUb1Ud87t65hOEif4RRPjGWHdD8W99kozkAHg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>EPUB Word Counter</h1>
+            <p class="subtitle">Secure, local word count analysis for your ebooks.</p>
+        </header>
+
+        <main>
+            <section class="upload-section" id="upload-section">
+                <div class="drop-zone" id="drop-zone">
+                    <div class="icon-container">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                            class="feather feather-book-open">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                        </svg>
+                    </div>
+                    <h2>Drag & Drop your EPUB here</h2>
+                    <p>or click to browse files</p>
+                    <input type="file" id="file-input" accept=".epub" hidden>
+                </div>
+                <p class="privacy-note">Files are processed locally in your browser. Nothing is uploaded.</p>
+            </section>
+
+            <section class="processing-section hidden" id="processing-section">
+                <div class="loader-container">
+                    <div class="spinner"></div>
+                    <p id="status-text">Reading file...</p>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+            </section>
+
+            <section class="results-section hidden" id="results-section">
+                <div class="summary-card">
+                    <div class="summary-item">
+                        <span class="label">Total Words</span>
+                        <span class="value" id="total-words">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Chapters</span>
+                        <span class="value" id="total-chapters">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Reading Time</span>
+                        <span class="value" id="reading-time">0m</span>
+                    </div>
+                </div>
+
+                <div class="details-container">
+                    <h3>Chapter Breakdown</h3>
+                    <div class="table-wrapper">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Chapter</th>
+                                    <th class="text-right">Word Count</th>
+                                    <th class="text-right">% of Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-body">
+                                <!-- Rows will be injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <button id="reset-btn" class="btn-secondary">Analyze Another Book</button>
+            </section>
+        </main>
+
+        <footer>
+            <p>Built with privacy in mind. <a href="https://github.com/xavdid/epub-wordcount" target="_blank">Inspired
+                    by xavdid/epub-wordcount</a></p>
+        </footer>
+    </div>
+    <script src="script.js"></script>
+    <script>
+        window.addEventListener('load', () => {
+            const b64 = "UEsDBBQAAAAAALp+OlxvYassFAAAABQAAAAIAAAAbWltZXR5cGVhcHBsaWNhdGlvbi9lcHViK3ppcFBLAwQUAAAAAAC6fjpcpW1p3vIAAADyAAAAFgAAAE1FVEEtSU5GL2NvbnRhaW5lci54bWw8P3htbCB2ZXJzaW9uPSIxLjAiPz4KPGNvbnRhaW5lciB2ZXJzaW9uPSIxLjAiIHhtbG5zPSJ1cm46b2FzaXM6bmFtZXM6dGM6b3BlbmRvY3VtZW50OnhtbG5zOmNvbnRhaW5lciI+CiAgICA8cm9vdGZpbGVzPgogICAgICAgIDxyb290ZmlsZSBmdWxsLXBhdGg9Ik9FQlBTL2NvbnRlbnQub3BmIiBtZWRpYS10eXBlPSJhcHBsaWNhdGlvbi9vZWJwcy1wYWNrYWdlK3htbCIvPgogICAgPC9yb290ZmlsZXM+CjwvY29udGFpbmVyPlBLAwQUAAAAAAC6fjpcXiFpx9sCAADbAgAAEQAAAE9FQlBTL2NvbnRlbnQub3BmPD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHBhY2thZ2UgeG1sbnM9Imh0dHA6Ly93d3cuaWRwZi5vcmcvMjAwNy9vcGYiIHVuaXF1ZS1pZGVudGlmaWVyPSJCb29rSWQiIHZlcnNpb249IjMuMCI+CiAgICA8bWV0YWRhdGEgeG1sbnM6ZGM9Imh0dHA6Ly9wdXJsLm9yZy9kYy9lbGVtZW50cy8xLjEvIj4KICAgICAgICA8ZGM6dGl0bGU+VGVzdCBCb29rPC9kYzp0aXRsZT4KICAgICAgICA8ZGM6bGFuZ3VhZ2U+ZW48L2RjOmxhbmd1YWdlPgogICAgICAgIDxkYzppZGVudGlmaWVyIGlkPSJCb29rSWQiPnVybjp1dWlkOjEyMzQ1PC9kYzppZGVudGlmaWVyPgogICAgPC9tZXRhZGF0YT4KICAgIDxtYW5pZmVzdD4KICAgICAgICA8aXRlbSBpZD0idG9jIiBocmVmPSJ0b2MueGh0bWwiIG1lZGlhLXR5cGU9ImFwcGxpY2F0aW9uL3hodG1sK3htbCIgcHJvcGVydGllcz0ibmF2Ii8+CiAgICAgICAgPGl0ZW0gaWQ9ImNoMSIgaHJlZj0iY2hhcHRlcjEueGh0bWwiIG1lZGlhLXR5cGU9ImFwcGxpY2F0aW9uL3hodG1sK3htbCIvPgogICAgICAgIDxpdGVtIGlkPSJjaDIiIGhyZWY9ImNoYXB0ZXIyLnhodG1sIiBtZWRpYS10eXBlPSJhcHBsaWNhdGlvbi94aHRtbCt4bWwiLz4KICAgIDwvbWFuaWZlc3Q+CiAgICA8c3BpbmU+CiAgICAgICAgPGl0ZW1yZWYgaWRyZWY9ImNoMSIvPgogICAgICAgIDxpdGVtcmVmIGlkcmVmPSJjaDIiLz4KICAgIDwvc3BpbmU+CjwvcGFja2FnZT5QSwMEFAAAAAAAun46XJNJapBvAQAAbwEAAA8AAABPRUJQUy90b2MueGh0bWw8P3htbCB2ZXJzaW9uPSIxLjAiIGVuY29kaW5nPSJVVEYtOCI/Pgo8aHRtbCB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94aHRtbCIgeG1sbnM6ZXB1Yj0iaHR0cDovL3d3dy5pZHBmLm9yZy8yMDA3L29wcyI+CjxoZWFkPjx0aXRsZT5UT0M8L3RpdGxlPjwvaGVhZD4KPGJvZHk+CiAgICA8bmF2IGVwdWI6dHlwZT0idG9jIj4KICAgICAgICA8b2w+CiAgICAgICAgICAgIDxsaT48YSBocmVmPSJjaGFwdGVyMS54aHRtbCI+Q2hhcHRlciBPbmU8L2E+PC9saT4KICAgICAgICAgICAgPGxpPjxhIGhyZWY9ImNoYXB0ZXIyLnhodG1sIj5DaGFwdGVyIFR3bzwvYT48L2xpPgogICAgICAgIDwvb2w+CiAgICA8L25hdj4KPC9ib2R5Pgo8L2h0bWw+UEsDBBQAAAAAALp+OlwMGwIZCgEAAAoBAAAUAAAAT0VCUFMvY2hhcHRlcjEueGh0bWw8P3htbCB2ZXJzaW9uPSIxLjAiIGVuY29kaW5nPSJVVEYtOCI/Pgo8aHRtbCB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94aHRtbCI+CjxoZWFkPjx0aXRsZT5DaGFwdGVyIDE8L3RpdGxlPjwvaGVhZD4KPGJvZHk+CiAgICA8aDE+Q2hhcHRlciBPbmU8L2gxPgogICAgPHA+VGhpcyBpcyB0aGUgZmlyc3QgY2hhcHRlci4gSXQgaGFzIHNvbWUgd29yZHMuPC9wPgogICAgPHA+SGVyZSBhcmUgbW9yZSB3b3JkcyB0byBjb3VudC48L3A+CjwvYm9keT4KPC9odG1sPlBLAwQUAAAAAAC6fjpcPsX+Td4AAADeAAAAFAAAAE9FQlBTL2NoYXB0ZXIyLnhodG1sPD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPGh0bWwgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGh0bWwiPgo8aGVhZD48dGl0bGU+Q2hhcHRlciAyPC90aXRsZT48L2hlYWQ+Cjxib2R5PgogICAgPGgxPkNoYXB0ZXIgVHdvPC9oMT4KICAgIDxwPlRoaXMgaXMgdGhlIHNlY29uZCBjaGFwdGVyLiBJdCBpcyBzaG9ydGVyLjwvcD4KPC9ib2R5Pgo8L2h0bWw+UEsBAhQAFAAAAAAAun46XG9hqywUAAAAFAAAAAgAAAAAAAAAAAAAAIABAAAAAG1pbWV0eXBlUEsBAhQAFAAAAAAAun46XKVtad7yAAAA8gAAABYAAAAAAAAAAAAAAIABOgAAAE1FVEEtSU5GL2NvbnRhaW5lci54bWxQSwECFAAUAAAAAAC6fjpcXiFpx9sCAADbAgAAEQAAAAAAAAAAAAAAgAFgAQAAT0VCUFMvY29udGVudC5vcGZQSwECFAAUAAAAAAC6fjpck0lqkG8BAABvAQAADwAAAAAAAAAAAAAAgAFqBAAAT0VCUFMvdG9jLnhodG1sUEsBAhQAFAAAAAAAun46XAwbAhkKAQAACgEAABQAAAAAAAAAAAAAAIABBgYAAE9FQlBTL2NoYXB0ZXIxLnhodG1sUEsBAhQAFAAAAAAAun46XD7F/k3eAAAA3gAAABQAAAAAAAAAAAAAAIABQgcAAE9FQlBTL2NoYXB0ZXIyLnhodG1sUEsFBgAAAAAGAAYAegEAAFIIAAAAAA==";
+            const byteCharacters = atob(b64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: 'application/epub+zip' });
+            const file = new File([blob], 'test.epub', { type: 'application/epub+zip' });
+
+            setTimeout(() => {
+                if (window.handleFile) {
+                    window.handleFile(file);
+                } else {
+                    console.error('handleFile not found');
+                }
+            }, 500);
+        });
+    </script>
+</body>
+
+</html>
