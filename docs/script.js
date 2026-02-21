@@ -107,6 +107,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.handleFile = handleFile;
 
+    document.getElementById('try-example').addEventListener('click', async (e) => {
+        e.preventDefault();
+        const res = await fetch('example/The Bat (1920).epub');
+        const blob = await res.blob();
+        const file = new File([blob], 'The Bat (1920).epub', { type: 'application/epub+zip' });
+        handleFile(file);
+    });
+
     async function handleFile(file) {
         if (file.type !== 'application/epub+zip' && !file.name.endsWith('.epub')) {
             alert('Please upload a valid EPUB file.');

@@ -97,6 +97,22 @@ h1 {
     opacity: 0.8;
 }
 
+.example-link {
+    text-align: center;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.example-link a {
+    color: var(--accent-color);
+    text-decoration: none;
+}
+
+.example-link a:hover {
+    text-decoration: underline;
+}
+
 /* Processing Section */
 .processing-section {
     text-align: center;
