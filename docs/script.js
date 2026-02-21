@@ -143,6 +143,21 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             extrasToggleWrapper.classList.add('hidden');
         }
+
+        // Show book info
+        const titleEl = document.getElementById('book-title');
+        const authorEl = document.getElementById('book-author');
+        const filenameEl = document.getElementById('book-filename');
+
+        titleEl.textContent = results.bookTitle || '';
+        titleEl.classList.toggle('hidden', !results.bookTitle);
+
+        authorEl.textContent = results.bookAuthor ? `by ${results.bookAuthor}` : '';
+        authorEl.classList.toggle('hidden', !results.bookAuthor);
+
+        filenameEl.textContent = results.fileName || '';
+        filenameEl.classList.toggle('hidden', !results.fileName);
+
         resultsSection.classList.remove('hidden');
         refreshResultsView(true);
     }
@@ -243,6 +258,8 @@ class EPubParser {
 
         onProgress(20, 'Parsing metadata...');
         const opfContent = await this.zip.file(opfPath).async('text');
+        const opfDoc = new DOMParser().parseFromString(opfContent, 'application/xml');
+        const metadata = this.parseMetadata(opfDoc);
         const { spine, manifest, tocId } = this.parseOpf(opfContent, opfPath);
 
         // Try to get chapter titles from TOC if available
@@ -317,6 +334,9 @@ class EPubParser {
         const tocAvailable = tocOrder.length > 0;
 
         this.results = {
+            fileName: file.name,
+            bookTitle: metadata.title || null,
+            bookAuthor: metadata.author || null,
             totalWords: tocAvailable ? totalWordsToc : totalWordsAll,
             totalWordsAll,
             chapters: tocAvailable ? tocChapters : allChapters,
@@ -332,6 +352,27 @@ class EPubParser {
         const parser = new DOMParser();
         const doc = parser.parseFromString(containerXml, 'application/xml');
         return doc.querySelector('rootfile').getAttribute('full-path');
+    }
+
+    parseMetadata(opfDoc) {
+        const meta = {};
+        // Try namespace-aware lookup first, fall back to getElementsByTagName
+        const getTag = (tag) => {
+            const els = opfDoc.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', tag);
+            return els.length > 0 ? els[0].textContent.trim() : null;
+        };
+        meta.title = getTag('title');
+        meta.author = getTag('creator');
+        // Fallback: non-namespaced search (some EPUBs use plain tags)
+        if (!meta.title) {
+            const t = opfDoc.getElementsByTagName('dc:title')[0];
+            if (t) meta.title = t.textContent.trim();
+        }
+        if (!meta.author) {
+            const a = opfDoc.getElementsByTagName('dc:creator')[0];
+            if (a) meta.author = a.textContent.trim();
+        }
+        return meta;
     }
 
     parseOpf(opfContent, opfPath) {
