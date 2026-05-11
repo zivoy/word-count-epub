@@ -456,9 +456,22 @@ class EPubParser {
             return { map, order };
         }
 
-        // Handle HTML Nav (EPUB 3) - simplified
+        // Handle HTML Nav (EPUB 3)
         const navDoc = parser.parseFromString(tocContent, 'text/html');
-        const anchors = Array.from(navDoc.querySelectorAll('nav[epub\\:type="toc"] a, nav[role="doc-toc"] a, nav[epub\\:type="toc"] li a'));
+        let anchors = Array.from(navDoc.querySelectorAll('nav[epub\\:type~="toc"] a, nav[role="doc-toc"] a'));
+        if (anchors.length === 0) {
+            // Some parsers don't match the colon-in-attribute selector; fall back to manual scan.
+            const navs = Array.from(navDoc.getElementsByTagName('nav'));
+            const tocNav = navs.find(n => {
+                const epubType = n.getAttribute('epub:type') || '';
+                if (epubType.split(/\s+/).includes('toc')) return true;
+                if (n.getAttribute('role') === 'doc-toc') return true;
+                return false;
+            }) || (navs.length === 1 ? navs[0] : null);
+            if (tocNav) {
+                anchors = Array.from(tocNav.getElementsByTagName('a'));
+            }
+        }
         anchors.forEach(a => {
             let href = a.getAttribute('href') || '';
             href = href.split('#')[0];
@@ -483,11 +496,24 @@ class EPubParser {
     }
 
     countWordsInHtml(htmlContent) {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlContent, 'text/html');
-        const text = doc.body.textContent || '';
-        // Basic word count: split by whitespace
+        const text = this.extractBodyText(htmlContent);
         const words = text.trim().split(/\s+/);
         return words.length === 1 && words[0] === '' ? 0 : words.length;
+    }
+
+    extractBodyText(content) {
+        const parser = new DOMParser();
+        // Try XML first: XHTML chapters often use self-closing tags like <title/>,
+        // which the HTML parser misinterprets as a rawtext opener that swallows
+        // the rest of the document.
+        const xmlDoc = parser.parseFromString(content, 'application/xhtml+xml');
+        if (!xmlDoc.getElementsByTagName('parsererror').length) {
+            const body = xmlDoc.getElementsByTagName('body')[0];
+            if (body) return body.textContent || '';
+            return xmlDoc.documentElement ? (xmlDoc.documentElement.textContent || '') : '';
+        }
+        // Fall back to HTML parser for content that isn't well-formed XML.
+        const htmlDoc = parser.parseFromString(content, 'text/html');
+        return htmlDoc.body ? (htmlDoc.body.textContent || '') : '';
     }
 }
