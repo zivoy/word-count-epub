@@ -472,6 +472,14 @@ class EPubParser {
         };
     }
 
+    async readText(zipEntry) {
+        // Strip a leading UTF-8 BOM — DOMParser treats U+FEFF before <?xml as
+        // a stray character and produces a parsererror, which then makes
+        // querySelector return null and downstream getAttribute throw.
+        const text = await zipEntry.async('text');
+        return text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+    }
+
     async parse(file, onProgress) {
         onProgress(10, 'Reading file structure...');
         this.zip = await JSZip.loadAsync(file);
@@ -481,7 +489,7 @@ class EPubParser {
         // so only flag when an actual content file is encrypted.
         const encFile = this.zip.file('META-INF/encryption.xml');
         if (encFile) {
-            const encXml = await encFile.async('text');
+            const encXml = await this.readText(encFile);
             const encryptsContent = /CipherReference\s+URI="[^"]*\.(x?html?|opf|ncx)"/i.test(encXml);
             if (encryptsContent) {
                 const isAdept = encXml.includes('http://ns.adobe.com/adept');
@@ -496,11 +504,11 @@ class EPubParser {
             }
         }
 
-        const containerXml = await this.zip.file('META-INF/container.xml').async('text');
+        const containerXml = await this.readText(this.zip.file('META-INF/container.xml'));
         const opfPath = this.getOpfPath(containerXml);
 
         onProgress(20, 'Parsing metadata...');
-        const opfContent = await this.zip.file(opfPath).async('text');
+        const opfContent = await this.readText(this.zip.file(opfPath));
         const opfDoc = new DOMParser().parseFromString(opfContent, 'application/xml');
         const metadata = this.parseMetadata(opfDoc);
         const { spine, manifest, tocId } = this.parseOpf(opfContent, opfPath);
@@ -511,7 +519,7 @@ class EPubParser {
         if (tocId && manifest[tocId]) {
             try {
                 const tocPath = this.resolvePath(opfPath, manifest[tocId].href);
-                const tocContent = await this.zip.file(tocPath).async('text');
+                const tocContent = await this.readText(this.zip.file(tocPath));
                 const tocData = this.parseToc(tocContent, tocPath);
                 tocMap = tocData.map;
                 tocOrder = tocData.order;
@@ -535,7 +543,7 @@ class EPubParser {
             const file = this.zip.file(itemPath);
 
             if (file) {
-                const content = await file.async('text');
+                const content = await this.readText(file);
                 const wordCount = this.countWordsInHtml(content);
                 const title = tocMap[normalizedPath] || `Chapter ${i + 1}`;
 
@@ -692,12 +700,20 @@ class EPubParser {
         const map = {};
         const order = [];
 
-        // Handle NCX (EPUB 2)
-        const ncxDoc = parser.parseFromString(tocContent, 'application/xml');
-        const navPoints = Array.from(ncxDoc.getElementsByTagName('navPoint'));
+        // Handle NCX (EPUB 2). Try XML first; if the NCX is malformed
+        // (mismatched/duplicate navPoint tags happen in the wild), fall back
+        // to the forgiving HTML parser so we don't lose chapter titles.
+        const ncxXmlDoc = parser.parseFromString(tocContent, 'application/xml');
+        const ncxHasError = ncxXmlDoc.getElementsByTagName('parsererror').length > 0;
+        const ncxDoc = ncxHasError
+            ? parser.parseFromString(tocContent, 'text/html')
+            : ncxXmlDoc;
+        // HTML parser lowercases tag names; XML preserves case.
+        const navPointTag = ncxHasError ? 'navpoint' : 'navPoint';
+        const navPoints = Array.from(ncxDoc.getElementsByTagName(navPointTag));
         if (navPoints.length > 0) {
             navPoints.forEach(point => {
-                const labelNode = point.querySelector('navLabel > text');
+                const labelNode = point.querySelector(ncxHasError ? 'navlabel > text' : 'navLabel > text');
                 const contentNode = point.querySelector('content');
                 if (!labelNode || !contentNode) return;
                 let src = contentNode.getAttribute('src') || '';
