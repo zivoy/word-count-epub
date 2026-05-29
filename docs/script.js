@@ -412,19 +412,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function exportDetailCSV() {
-        if (!currentResults) return;
-        const rows = [['Chapter', 'Words', '% of Total']];
-        let runningTotal = 0;
-        currentResults.chapters.forEach(ch => {
-            runningTotal += ch.wordCount;
-            const displayCount = showRunningTotals ? runningTotal : ch.wordCount;
-            const pct = currentResults.totalWords > 0
-                ? ((displayCount / currentResults.totalWords) * 100).toFixed(1) + '%'
-                : '';
-            rows.push([ch.title, displayCount, pct]);
+        if (!baseResults) return;
+        // Always export every spine item with words, regardless of the
+        // include-extras toggle or the running-total view: the CSV is the
+        // raw data, not the current view.
+        const rows = [['Chapter', 'Words', 'in_toc']];
+        let total = 0;
+        baseResults.chaptersAll.forEach(ch => {
+            total += ch.wordCount;
+            rows.push([ch.title, ch.wordCount, ch.inToc ? 'true' : 'false']);
         });
-        rows.push(['Total', currentResults.totalWords, '100%']);
-        const base = currentResults.bookTitle || currentResults.fileName || 'book';
+        rows.push(['Total', total, '']);
+        const base = baseResults.bookTitle || baseResults.fileName || 'book';
         downloadCSV(`${safeFilename(base)}.csv`, toCSV(rows));
     }
 
@@ -573,11 +572,9 @@ class EPubParser {
             const item = spineMap.get(path);
             if (!item) continue;
 
-            if (item.wordCount > 0) {
-                allChapters.push(item);
-            }
+            const inToc = tocPathSet.has(path);
 
-            if (tocPathSet.has(path)) {
+            if (inToc) {
                 if (currentTocChapter && currentTocChapter.wordCount > 0) {
                     tocChapters.push(currentTocChapter);
                 }
@@ -588,6 +585,22 @@ class EPubParser {
                 };
             } else if (currentTocChapter) {
                 currentTocChapter.wordCount += item.wordCount;
+            }
+
+            if (item.wordCount > 0) {
+                // Non-TOC items inherit the preceding TOC chapter's title so
+                // the CSV (and the include-extras view) shows which TOC
+                // chapter the split-off file belongs to, instead of an
+                // opaque "Chapter N".
+                const allTitle = inToc
+                    ? (tocMap[path] || item.title)
+                    : (currentTocChapter ? currentTocChapter.title : item.title);
+                allChapters.push({
+                    title: allTitle,
+                    wordCount: item.wordCount,
+                    href: item.href,
+                    inToc
+                });
             }
         }
         if (currentTocChapter && currentTocChapter.wordCount > 0) {
