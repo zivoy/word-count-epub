@@ -408,8 +408,10 @@ class EPubParser {
         const parser = new DOMParser();
         const doc = parser.parseFromString(opfContent, 'application/xml');
 
-        // Namespace handling can be tricky in XML, so we might use localName
-        const manifestItems = Array.from(doc.getElementsByTagName('item'));
+        // Use namespace-wildcard lookup: some EPUBs prefix manifest/spine tags
+        // (e.g. <opf:item>), which getElementsByTagName won't match in XML mode.
+        const manifestItems = Array.from(doc.getElementsByTagNameNS('*', 'item'))
+            .filter(el => el.parentNode && el.parentNode.localName === 'manifest');
         const manifest = {};
         let tocId = null;
 
@@ -428,11 +430,11 @@ class EPubParser {
 
         // Fallback for EPUB 2 NCX
         if (!tocId) {
-            const spine = doc.getElementsByTagName('spine')[0];
-            tocId = spine.getAttribute('toc');
+            const spine = doc.getElementsByTagNameNS('*', 'spine')[0];
+            if (spine) tocId = spine.getAttribute('toc');
         }
 
-        const spineItems = Array.from(doc.getElementsByTagName('itemref'));
+        const spineItems = Array.from(doc.getElementsByTagNameNS('*', 'itemref'));
         const spine = spineItems.map(item => item.getAttribute('idref'));
 
         return { spine, manifest, tocId };
