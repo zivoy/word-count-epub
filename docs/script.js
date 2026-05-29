@@ -160,7 +160,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayResults(results) {
         baseResults = results;
-        includeExtras = !results.tocAvailable;
+        // If the TOC covers <=20% of the spine's total words, the TOC is
+        // almost certainly incomplete (e.g. only points at the titlepage) —
+        // default to including extras so the user sees the real total.
+        const tocCoverage = results.totalWordsAll > 0
+            ? results.totalWords / results.totalWordsAll
+            : 1;
+        includeExtras = !results.tocAvailable || tocCoverage <= 0.20;
         extrasToggle.checked = includeExtras;
         if (results.tocAvailable && results.hasNonTocItems) {
             extrasToggleWrapper.classList.remove('hidden');
