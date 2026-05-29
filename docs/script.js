@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusText = document.getElementById('status-text');
     const resultsBody = document.getElementById('results-body');
     const resetBtn = document.getElementById('reset-btn');
+    const backLink = document.getElementById('back-link');
     const runningToggle = document.getElementById('running-toggle');
     const extrasToggleWrapper = document.getElementById('extras-toggle-wrapper');
     const extrasToggle = document.getElementById('extras-toggle');
@@ -23,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let wpm = 250;
     let showRunningTotals = false;
     let includeExtras = false;
+    let historyStatePushed = false;
 
     // Drag and Drop handlers
     dropZone.addEventListener('click', () => fileInput.click());
@@ -51,7 +53,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    resetBtn.addEventListener('click', resetApp);
+    resetBtn.addEventListener('click', goBack);
+    backLink.addEventListener('click', goBack);
+
+    window.addEventListener('popstate', () => {
+        historyStatePushed = false;
+        resetApp();
+    });
+
+    function goBack() {
+        if (historyStatePushed) {
+            history.back();
+        } else {
+            resetApp();
+        }
+    }
     runningToggle.addEventListener('change', () => {
         showRunningTotals = runningToggle.checked;
         if (currentResults) {
@@ -168,6 +184,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         resultsSection.classList.remove('hidden');
         refreshResultsView(true);
+
+        if (!historyStatePushed) {
+            history.pushState({ view: 'results' }, '');
+            historyStatePushed = true;
+        }
     }
 
     function refreshResultsView(animate) {
