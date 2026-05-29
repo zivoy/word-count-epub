@@ -32,9 +32,9 @@
                             <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
                         </svg>
                     </div>
-                    <h2>Drag & Drop your EPUB here</h2>
+                    <h2>Drag & Drop your EPUB(s) here</h2>
                     <p>or click to browse files</p>
-                    <input type="file" id="file-input" accept=".epub" hidden>
+                    <input type="file" id="file-input" accept=".epub" multiple hidden>
                 </div>
                 <p class="privacy-note">Files are processed locally in your browser. Nothing is uploaded.</p>
                 <p class="example-link">or <a href="#" id="try-example">try an example</a></p>
@@ -47,6 +47,43 @@
                 </div>
                 <div class="progress-bar-container">
                     <div class="progress-bar" id="progress-bar"></div>
+                </div>
+            </section>
+
+            <section class="library-section hidden" id="library-section">
+                <button type="button" class="back-link" id="library-back-link">&larr; Choose different books</button>
+                <div class="details-header">
+                    <h3 id="library-title">Books</h3>
+                    <div class="toggle-group">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="library-filenames-toggle">
+                            <span class="toggle-text">Show filenames</span>
+                        </label>
+                        <button type="button" class="btn-link csv-btn" id="library-csv-btn">Export CSV</button>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table class="results-table library-table">
+                        <thead>
+                            <tr>
+                                <th>Book</th>
+                                <th>Author</th>
+                                <th class="text-right">Words</th>
+                                <th class="text-right">Chapters</th>
+                                <th class="text-right">Reading Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="library-body"></tbody>
+                        <tfoot>
+                            <tr class="totals-row">
+                                <td><strong>Total</strong></td>
+                                <td></td>
+                                <td class="text-right" id="library-total-words"></td>
+                                <td class="text-right" id="library-total-chapters"></td>
+                                <td class="text-right" id="library-total-time"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
             </section>
 
@@ -90,6 +127,7 @@
                                 <input type="checkbox" id="extras-toggle">
                                 <span class="toggle-text">Include non-TOC items</span>
                             </label>
+                            <button type="button" class="btn-link csv-btn" id="detail-csv-btn">Export CSV</button>
                         </div>
                     </div>
                     <div class="table-wrapper">

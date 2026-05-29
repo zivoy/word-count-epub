@@ -4,6 +4,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadSection = document.getElementById('upload-section');
     const processingSection = document.getElementById('processing-section');
     const resultsSection = document.getElementById('results-section');
+    const librarySection = document.getElementById('library-section');
+    const libraryBody = document.getElementById('library-body');
+    const libraryBackLink = document.getElementById('library-back-link');
+    const libraryCsvBtn = document.getElementById('library-csv-btn');
+    const libraryFilenamesToggle = document.getElementById('library-filenames-toggle');
+    const detailCsvBtn = document.getElementById('detail-csv-btn');
     const progressBar = document.getElementById('progress-bar');
     const statusText = document.getElementById('status-text');
     const resultsBody = document.getElementById('results-body');
@@ -19,14 +25,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const wpmInput = document.getElementById('wpm-input');
     const wpmApply = document.getElementById('wpm-apply');
 
+    // library: [{ file, results?, error? }, ...] — populated by handleFiles,
+    // survives library ⇄ detail navigation so back-button restores the table.
+    let library = [];
     let baseResults = null;
     let currentResults = null;
+    let cameFromLibrary = false;
     let wpm = 250;
     let showRunningTotals = false;
     let includeExtras = false;
-    let historyStatePushed = false;
+    let showLibraryFilenames = false;
 
-    // Drag and Drop handlers
     dropZone.addEventListener('click', () => fileInput.click());
 
     dropZone.addEventListener('dragover', (e) => {
@@ -41,33 +50,50 @@ document.addEventListener('DOMContentLoaded', () => {
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('drag-over');
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            handleFile(files[0]);
+        if (e.dataTransfer.files.length > 0) {
+            handleFiles(e.dataTransfer.files);
         }
     });
 
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
-            handleFile(e.target.files[0]);
+            handleFiles(e.target.files);
         }
     });
 
-    resetBtn.addEventListener('click', goBack);
-    backLink.addEventListener('click', goBack);
+    resetBtn.addEventListener('click', () => history.back());
+    backLink.addEventListener('click', () => history.back());
+    libraryBackLink.addEventListener('click', () => history.back());
+    libraryCsvBtn.addEventListener('click', exportLibraryCSV);
+    libraryFilenamesToggle.addEventListener('change', () => {
+        showLibraryFilenames = libraryFilenamesToggle.checked;
+        renderLibrary();
+    });
+    detailCsvBtn.addEventListener('click', exportDetailCSV);
 
-    window.addEventListener('popstate', () => {
-        historyStatePushed = false;
-        resetApp();
+    window.addEventListener('popstate', (e) => {
+        const state = e.state;
+        if (!state) {
+            showUploadView();
+            return;
+        }
+        if (state.view === 'library') {
+            cameFromLibrary = false;
+            showLibraryView();
+        } else if (state.view === 'detail') {
+            const idx = state.bookIndex;
+            if (idx != null && library[idx] && library[idx].results) {
+                cameFromLibrary = true;
+                showDetailView(library[idx].results, false);
+            } else if (library.length === 1 && library[0].results) {
+                cameFromLibrary = false;
+                showDetailView(library[0].results, false);
+            } else {
+                showUploadView();
+            }
+        }
     });
 
-    function goBack() {
-        if (historyStatePushed) {
-            history.back();
-        } else {
-            resetApp();
-        }
-    }
     runningToggle.addEventListener('change', () => {
         showRunningTotals = runningToggle.checked;
         if (currentResults) {
@@ -96,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
         wpm = Math.min(Math.max(nextValue, 100), 1000);
         wpmInput.value = wpm;
         updateReadingTime();
+        if (library.length > 1) renderLibrary();
         wpmControl.classList.add('hidden');
     });
 
@@ -105,61 +132,157 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    function resetApp() {
+    function showUploadView() {
         fileInput.value = '';
         resultsSection.classList.add('hidden');
+        librarySection.classList.add('hidden');
         uploadSection.classList.remove('hidden');
         progressBar.style.width = '0%';
-        resultsBody.innerHTML = '';
-        baseResults = null;
-        currentResults = null;
-        showRunningTotals = false;
-        runningToggle.checked = false;
         wpmControl.classList.add('hidden');
-        includeExtras = false;
-        extrasToggle.checked = false;
-        extrasToggleWrapper.classList.add('hidden');
+        cameFromLibrary = false;
+        // Leave library/baseResults intact so forward-nav still works.
     }
 
-    window.handleFile = handleFile;
+    function showLibraryView() {
+        uploadSection.classList.add('hidden');
+        resultsSection.classList.add('hidden');
+        librarySection.classList.remove('hidden');
+        renderLibrary();
+    }
+
+    function showDetailView(results, animate) {
+        uploadSection.classList.add('hidden');
+        librarySection.classList.add('hidden');
+        backLink.textContent = cameFromLibrary ? '← Back to books' : '← Choose another book';
+        resetBtn.textContent = cameFromLibrary ? 'Back to books' : 'Analyze Another Book';
+        displayResults(results, animate);
+    }
+
+    window.handleFile = (file) => handleFiles([file]);
+    window.handleFiles = handleFiles;
 
     document.getElementById('try-example').addEventListener('click', async (e) => {
         e.preventDefault();
         const res = await fetch('example/The Bat (1920).epub');
         const blob = await res.blob();
         const file = new File([blob], 'The Bat (1920).epub', { type: 'application/epub+zip' });
-        handleFile(file);
+        handleFiles([file]);
     });
 
-    async function handleFile(file) {
-        if (file.type !== 'application/epub+zip' && !file.name.endsWith('.epub')) {
-            alert('Please upload a valid EPUB file.');
+    async function handleFiles(fileList) {
+        const epubs = Array.from(fileList).filter(
+            f => f.type === 'application/epub+zip' || f.name.toLowerCase().endsWith('.epub')
+        );
+        if (epubs.length === 0) {
+            alert('Please drop one or more EPUB files.');
             return;
         }
 
         uploadSection.classList.add('hidden');
         processingSection.classList.remove('hidden');
         statusText.textContent = 'Unzipping file...';
+        progressBar.style.width = '0%';
 
-        try {
-            const parser = new EPubParser();
-            await parser.parse(file, (progress, message) => {
-                progressBar.style.width = `${progress}%`;
-                statusText.textContent = message;
-            });
+        library = [];
+        const multi = epubs.length > 1;
 
-            displayResults(parser.results);
-        } catch (error) {
-            console.error(error);
-            const prefix = error.code === 'EPUB_DRM' ? '' : 'Error parsing EPUB: ';
-            alert(prefix + error.message);
-            resetApp();
-        } finally {
-            processingSection.classList.add('hidden');
+        for (let i = 0; i < epubs.length; i++) {
+            const file = epubs[i];
+            const prefix = multi ? `(${i + 1}/${epubs.length}) ` : '';
+            try {
+                const parser = new EPubParser();
+                await parser.parse(file, (progress, message) => {
+                    const overall = multi
+                        ? ((i + progress / 100) / epubs.length) * 100
+                        : progress;
+                    progressBar.style.width = `${overall}%`;
+                    statusText.textContent = prefix + message;
+                });
+                library.push({ file, results: parser.results });
+            } catch (err) {
+                console.error(err);
+                if (!multi) {
+                    const errPrefix = err.code === 'EPUB_DRM' ? '' : 'Error parsing EPUB: ';
+                    alert(errPrefix + err.message);
+                    processingSection.classList.add('hidden');
+                    showUploadView();
+                    return;
+                }
+                library.push({ file, error: err });
+            }
+        }
+
+        processingSection.classList.add('hidden');
+
+        const successful = library.filter(b => b.results);
+        if (successful.length === 1 && library.length === 1) {
+            cameFromLibrary = false;
+            showDetailView(library[0].results, true);
+            history.pushState({ view: 'detail', bookIndex: null }, '');
+        } else {
+            cameFromLibrary = false;
+            showLibraryView();
+            history.pushState({ view: 'library' }, '');
         }
     }
 
-    function displayResults(results) {
+    function renderLibrary() {
+        libraryBody.innerHTML = '';
+        let totalWords = 0;
+        let totalChapters = 0;
+
+        library.forEach((entry, idx) => {
+            const tr = document.createElement('tr');
+            if (entry.error) {
+                tr.classList.add('error-row');
+                const msg = entry.error.code === 'EPUB_DRM' ? 'DRM-protected' : (entry.error.message || 'Failed to parse');
+                tr.innerHTML = `
+                    <td>
+                        <div class="book-cell-title">${escapeHtml(entry.file.name)}</div>
+                        <div class="book-cell-filename">${escapeHtml(msg)}</div>
+                    </td>
+                    <td></td>
+                    <td class="text-right">&mdash;</td>
+                    <td class="text-right">&mdash;</td>
+                    <td class="text-right">&mdash;</td>
+                `;
+            } else {
+                const r = entry.results;
+                const words = r.totalWords;
+                const chapters = r.chapters.length;
+                totalWords += words;
+                totalChapters += chapters;
+                const title = r.bookTitle || r.fileName;
+                const showFilename = showLibraryFilenames && r.bookTitle && r.fileName && r.fileName !== r.bookTitle;
+                tr.innerHTML = `
+                    <td>
+                        <div class="book-cell-title">${escapeHtml(title)}</div>
+                        ${showFilename ? `<div class="book-cell-filename">${escapeHtml(r.fileName)}</div>` : ''}
+                    </td>
+                    <td>${escapeHtml(r.bookAuthor || '')}</td>
+                    <td class="text-right">${words.toLocaleString()}</td>
+                    <td class="text-right">${chapters.toLocaleString()}</td>
+                    <td class="text-right">${formatReadingTime(Math.ceil(words / wpm))}</td>
+                `;
+                tr.addEventListener('click', () => openBookFromLibrary(idx));
+            }
+            libraryBody.appendChild(tr);
+        });
+
+        document.getElementById('library-total-words').textContent = totalWords.toLocaleString();
+        document.getElementById('library-total-chapters').textContent = totalChapters.toLocaleString();
+        document.getElementById('library-total-time').textContent = formatReadingTime(Math.ceil(totalWords / wpm));
+    }
+
+    function openBookFromLibrary(idx) {
+        const entry = library[idx];
+        if (!entry || !entry.results) return;
+        cameFromLibrary = true;
+        showDetailView(entry.results, true);
+        history.pushState({ view: 'detail', bookIndex: idx }, '');
+    }
+
+    function displayResults(results, animate = true) {
         baseResults = results;
         // If the TOC has only 1–2 entries against a much larger spine, it's
         // almost certainly broken (e.g. points only at the titlepage) —
@@ -175,7 +298,6 @@ document.addEventListener('DOMContentLoaded', () => {
             extrasToggleWrapper.classList.add('hidden');
         }
 
-        // Show book info
         const titleEl = document.getElementById('book-title');
         const authorEl = document.getElementById('book-author');
         const filenameEl = document.getElementById('book-filename');
@@ -190,12 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         filenameEl.classList.toggle('hidden', !results.fileName);
 
         resultsSection.classList.remove('hidden');
-        refreshResultsView(true);
-
-        if (!historyStatePushed) {
-            history.pushState({ view: 'results' }, '');
-            historyStatePushed = true;
-        }
+        refreshResultsView(animate);
     }
 
     function refreshResultsView(animate) {
@@ -230,15 +347,85 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateReadingTime() {
         if (!currentResults) return;
-        const minutes = Math.ceil(currentResults.totalWords / wpm);
-        const hours = Math.floor(minutes / 60);
-        const remainingMinutes = minutes % 60;
-        let timeString = `${minutes}m`;
-        if (hours > 0) {
-            timeString = `${hours}h ${remainingMinutes}m`;
-        }
-        readingTimeEl.textContent = timeString;
+        readingTimeEl.textContent = formatReadingTime(Math.ceil(currentResults.totalWords / wpm));
         readingTimeLabel.textContent = `Reading Time (${wpm} wpm)`;
+    }
+
+    function formatReadingTime(minutes) {
+        const hours = Math.floor(minutes / 60);
+        const rem = minutes % 60;
+        return hours > 0 ? `${hours}h ${rem}m` : `${minutes}m`;
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
+    function toCSV(rows) {
+        return rows.map(row => row.map(cell => {
+            const s = cell == null ? '' : String(cell);
+            return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        }).join(',')).join('\r\n');
+    }
+
+    function downloadCSV(filename, csvText) {
+        const blob = new Blob(['﻿' + csvText], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function safeFilename(s) {
+        return String(s).replace(/[/\\?%*:|"<>]/g, '_').trim() || 'export';
+    }
+
+    function exportLibraryCSV() {
+        if (library.length === 0) return;
+        const rows = [['Filename', 'Title', 'Author', 'Words', 'Chapters', 'Reading Time (min)']];
+        let totalW = 0, totalC = 0;
+        library.forEach(entry => {
+            if (entry.error) {
+                rows.push([entry.file.name, '', '', 'ERROR', entry.error.message || '', '']);
+                return;
+            }
+            const r = entry.results;
+            totalW += r.totalWords;
+            totalC += r.chapters.length;
+            rows.push([
+                r.fileName,
+                r.bookTitle || '',
+                r.bookAuthor || '',
+                r.totalWords,
+                r.chapters.length,
+                Math.ceil(r.totalWords / wpm)
+            ]);
+        });
+        rows.push(['Total', '', '', totalW, totalC, Math.ceil(totalW / wpm)]);
+        downloadCSV('epub-library.csv', toCSV(rows));
+    }
+
+    function exportDetailCSV() {
+        if (!currentResults) return;
+        const rows = [['Chapter', 'Words', '% of Total']];
+        let runningTotal = 0;
+        currentResults.chapters.forEach(ch => {
+            runningTotal += ch.wordCount;
+            const displayCount = showRunningTotals ? runningTotal : ch.wordCount;
+            const pct = currentResults.totalWords > 0
+                ? ((displayCount / currentResults.totalWords) * 100).toFixed(1) + '%'
+                : '';
+            rows.push([ch.title, displayCount, pct]);
+        });
+        rows.push(['Total', currentResults.totalWords, '100%']);
+        const base = currentResults.bookTitle || currentResults.fileName || 'book';
+        downloadCSV(`${safeFilename(base)}.csv`, toCSV(rows));
     }
 
     function renderTable(results) {

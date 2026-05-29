@@ -302,7 +302,7 @@ h1 {
 .table-wrapper {
     background-color: var(--card-bg);
     border-radius: 1rem;
-    overflow: hidden;
+    overflow-x: auto;
     border: 1px solid var(--border-color);
 }
 
@@ -343,6 +343,64 @@ h1 {
     cursor: pointer;
     font-size: 1rem;
     transition: all 0.2s;
+}
+
+/* Library view */
+.library-section {
+    animation: slideUp 0.5s ease-out;
+}
+
+.library-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.library-table tbody tr:hover {
+    background-color: rgba(56, 189, 248, 0.08);
+}
+
+.library-table tbody tr.error-row {
+    cursor: default;
+    color: var(--error-color);
+}
+
+.library-table tbody tr.error-row:hover {
+    background-color: transparent;
+}
+
+.library-table .book-cell-title {
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.library-table .book-cell-filename {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    opacity: 0.7;
+    overflow-wrap: anywhere;
+}
+
+.library-table td:first-child {
+    min-width: 14rem;
+    max-width: 26rem;
+}
+
+.library-table .text-right {
+    white-space: nowrap;
+}
+
+.library-table tfoot td {
+    background-color: rgba(15, 23, 42, 0.5);
+    font-weight: 600;
+    color: var(--text-primary);
+    border-top: 1px solid var(--border-color);
+    border-bottom: none;
+}
+
+.csv-btn {
+    font-size: 0.9rem;
+    padding: 0;
 }
 
 .btn-secondary:hover {
