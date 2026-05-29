@@ -161,13 +161,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayResults(results) {
         baseResults = results;
-        // If the TOC covers <=20% of the spine's total words, the TOC is
-        // almost certainly incomplete (e.g. only points at the titlepage) —
-        // default to including extras so the user sees the real total.
-        const tocCoverage = results.totalWordsAll > 0
-            ? results.totalWords / results.totalWordsAll
-            : 1;
-        includeExtras = !results.tocAvailable || tocCoverage <= 0.20;
+        // If the TOC has only 1–2 entries against a much larger spine, it's
+        // almost certainly broken (e.g. points only at the titlepage) —
+        // default to including extras so the user sees the real chapters.
+        const tocLooksBroken = results.tocAvailable
+            && results.uniqueTocEntries < 3
+            && results.spineItemCount >= 5;
+        includeExtras = !results.tocAvailable || tocLooksBroken;
         extrasToggle.checked = includeExtras;
         if (results.tocAvailable && results.hasNonTocItems) {
             extrasToggleWrapper.classList.remove('hidden');
@@ -364,30 +364,45 @@ class EPubParser {
             onProgress(percent, `Analyzing chapter ${i + 1} of ${totalItems}...`);
         }
 
+        // Walk spine in order. TOC entries define chapter boundaries; any
+        // spine item NOT in the TOC folds into the preceding TOC chapter
+        // (e.g. Calibre splits chapters into a heading file + body file but
+        // only links the heading from the TOC — without folding, the body
+        // would orphan into extras and the TOC chapter would show 1 word).
+        const tocPathSet = new Set(tocOrder);
         const tocChapters = [];
         const allChapters = [];
-        const included = new Set();
+        let currentTocChapter = null;
 
-        if (tocOrder.length > 0) {
-            tocOrder.forEach(path => {
-                const chapter = spineMap.get(path);
-                if (!chapter || chapter.wordCount <= 0 || included.has(path)) return;
-                tocChapters.push(chapter);
-                allChapters.push(chapter);
-                included.add(path);
-            });
+        for (const path of spineOrder) {
+            const item = spineMap.get(path);
+            if (!item) continue;
+
+            if (item.wordCount > 0) {
+                allChapters.push(item);
+            }
+
+            if (tocPathSet.has(path)) {
+                if (currentTocChapter && currentTocChapter.wordCount > 0) {
+                    tocChapters.push(currentTocChapter);
+                }
+                currentTocChapter = {
+                    title: tocMap[path] || item.title,
+                    wordCount: item.wordCount,
+                    href: item.href
+                };
+            } else if (currentTocChapter) {
+                currentTocChapter.wordCount += item.wordCount;
+            }
         }
-
-        spineOrder.forEach(path => {
-            if (included.has(path)) return;
-            const chapter = spineMap.get(path);
-            if (!chapter || chapter.wordCount <= 0) return;
-            allChapters.push(chapter);
-        });
+        if (currentTocChapter && currentTocChapter.wordCount > 0) {
+            tocChapters.push(currentTocChapter);
+        }
 
         const totalWordsToc = tocChapters.reduce((sum, chapter) => sum + chapter.wordCount, 0);
         const totalWordsAll = allChapters.reduce((sum, chapter) => sum + chapter.wordCount, 0);
         const tocAvailable = tocOrder.length > 0;
+        const uniqueTocEntries = new Set(tocOrder).size;
 
         this.results = {
             fileName: file.name,
@@ -398,6 +413,8 @@ class EPubParser {
             chapters: tocAvailable ? tocChapters : allChapters,
             chaptersAll: allChapters,
             tocAvailable,
+            uniqueTocEntries,
+            spineItemCount: spineOrder.length,
             hasNonTocItems: tocAvailable && allChapters.length > tocChapters.length
         };
 
