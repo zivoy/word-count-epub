@@ -151,7 +151,8 @@ document.addEventListener('DOMContentLoaded', () => {
             displayResults(parser.results);
         } catch (error) {
             console.error(error);
-            alert('Error parsing EPUB: ' + error.message);
+            const prefix = error.code === 'EPUB_DRM' ? '' : 'Error parsing EPUB: ';
+            alert(prefix + error.message);
             resetApp();
         } finally {
             processingSection.classList.add('hidden');
@@ -287,6 +288,26 @@ class EPubParser {
     async parse(file, onProgress) {
         onProgress(10, 'Reading file structure...');
         this.zip = await JSZip.loadAsync(file);
+
+        // Detect DRM before trying to read scrambled chapters (which would fail)
+        // Font-only obfuscation leaves text readable,
+        // so only flag when an actual content file is encrypted.
+        const encFile = this.zip.file('META-INF/encryption.xml');
+        if (encFile) {
+            const encXml = await encFile.async('text');
+            const encryptsContent = /CipherReference\s+URI="[^"]*\.(x?html?|opf|ncx)"/i.test(encXml);
+            if (encryptsContent) {
+                const isAdept = encXml.includes('http://ns.adobe.com/adept');
+                const flavor = isAdept ? 'Adobe Adept DRM' : 'DRM';
+                const err = new Error(
+                    `This EPUB is protected by ${flavor}: its text content is encrypted, ` +
+                    `so we can't count words. You'll need to remove the DRM first ` +
+                    `(e.g. by opening it in a tool that can decrypt your purchased copy).`
+                );
+                err.code = 'EPUB_DRM';
+                throw err;
+            }
+        }
 
         const containerXml = await this.zip.file('META-INF/container.xml').async('text');
         const opfPath = this.getOpfPath(containerXml);
