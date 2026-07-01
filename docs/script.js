@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const extrasToggleWrapper = document.getElementById('extras-toggle-wrapper');
     const extrasToggle = document.getElementById('extras-toggle');
     const countHeader = document.getElementById('count-header');
+    const pagesHeader = document.getElementById('pages-header');
+    const pagesLabel = document.getElementById('pages-label');
     const readingTimeEl = document.getElementById('reading-time');
     const readingTimeLabel = document.getElementById('reading-time-label');
     const wpmControl = document.getElementById('wpm-control');
@@ -32,9 +34,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentResults = null;
     let cameFromLibrary = false;
     let wpm = 250;
+    let words_per_page = 275;
     let showRunningTotals = false;
     let includeExtras = false;
     let showLibraryFilenames = false;
+
+    pagesLabel.textContent = `Pages (${words_per_page} words/page)`;
 
     dropZone.addEventListener('click', () => fileInput.click());
 
@@ -339,10 +344,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (animate) {
             animateValue('total-words', 0, results.totalWords, 1000);
             animateValue('total-chapters', 0, results.chapters.length, 1000);
+            animateValue('total-pages', 0, estimatePages(results.totalWords), 1000);
             return;
         }
         document.getElementById('total-words').textContent = results.totalWords.toLocaleString();
         document.getElementById('total-chapters').textContent = results.chapters.length.toLocaleString();
+        document.getElementById('total-pages').textContent = estimatePages(results.totalWords).toLocaleString();
     }
 
     function updateReadingTime() {
@@ -355,6 +362,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const hours = Math.floor(minutes / 60);
         const rem = minutes % 60;
         return hours > 0 ? `${hours}h ${rem}m` : `${minutes}m`;
+    }
+
+    function estimatePages(words) {
+        return Math.ceil(words / words_per_page);
     }
 
     function escapeHtml(s) {
@@ -430,17 +441,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTable(results) {
         resultsBody.innerHTML = '';
         countHeader.textContent = showRunningTotals ? 'Running Total' : 'Word Count';
+        pagesHeader.textContent = showRunningTotals ? 'Running Pages (est.)' : 'Pages (est.)';
         let runningTotal = 0;
 
         results.chapters.forEach(chapter => {
             runningTotal += chapter.wordCount;
             const displayCount = showRunningTotals ? runningTotal : chapter.wordCount;
+            const displayPages = estimatePages(displayCount);
             const percentage = ((displayCount / results.totalWords) * 100).toFixed(1);
             const tr = document.createElement('tr');
 
             tr.innerHTML = `
                 <td>${chapter.title}</td>
                 <td class="text-right">${displayCount.toLocaleString()}</td>
+                <td class="text-right">${displayPages.toLocaleString()}</td>
                 <td class="text-right">${percentage}%</td>
             `;
             resultsBody.appendChild(tr);
