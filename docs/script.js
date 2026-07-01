@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetBtn = document.getElementById('reset-btn');
     const backLink = document.getElementById('back-link');
     const runningToggle = document.getElementById('running-toggle');
+    const chapterPageToggle = document.getElementById('chapter-page-toggle');
     const extrasToggleWrapper = document.getElementById('extras-toggle-wrapper');
     const extrasToggle = document.getElementById('extras-toggle');
     const countHeader = document.getElementById('count-header');
@@ -40,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let wpm = 250;
     let words_per_page = 275;
     let showRunningTotals = false;
+    let chapterNewPage = true;
     let includeExtras = false;
     let showLibraryFilenames = false;
 
@@ -106,6 +108,14 @@ document.addEventListener('DOMContentLoaded', () => {
     runningToggle.addEventListener('change', () => {
         showRunningTotals = runningToggle.checked;
         if (currentResults) {
+            renderTable(currentResults);
+        }
+    });
+
+    chapterPageToggle.addEventListener('change', () => {
+        chapterNewPage = chapterPageToggle.checked;
+        if (currentResults) {
+            updateSummary(currentResults, false);
             renderTable(currentResults);
         }
     });
@@ -375,15 +385,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateSummary(results, animate) {
+        const totalPages = estimateTotalPages(results);
         if (animate) {
             animateValue('total-words', 0, results.totalWords, 1000);
             animateValue('total-chapters', 0, results.chapters.length, 1000);
-            animateValue('total-pages', 0, estimatePages(results.totalWords), 1000);
+            animateValue('total-pages', 0, totalPages, 1000);
             return;
         }
         document.getElementById('total-words').textContent = results.totalWords.toLocaleString();
         document.getElementById('total-chapters').textContent = results.chapters.length.toLocaleString();
-        document.getElementById('total-pages').textContent = estimatePages(results.totalWords).toLocaleString();
+        document.getElementById('total-pages').textContent = totalPages.toLocaleString();
     }
 
     function updateReadingTime() {
@@ -400,6 +411,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function estimatePages(words) {
         return Math.ceil(words / words_per_page);
+    }
+
+    function estimateTotalPages(results) {
+        if (chapterNewPage) {
+            return results.chapters.reduce((sum, chapter) => sum + estimatePages(chapter.wordCount), 0);
+        }
+        return estimatePages(results.totalWords);
     }
 
     function updatePagesLabel() {
@@ -481,11 +499,16 @@ document.addEventListener('DOMContentLoaded', () => {
         countHeader.textContent = showRunningTotals ? 'Running Total' : 'Word Count';
         pagesHeader.textContent = showRunningTotals ? 'Running Pages (est.)' : 'Pages (est.)';
         let runningTotal = 0;
+        let runningPages = 0;
 
         results.chapters.forEach(chapter => {
             runningTotal += chapter.wordCount;
+            const chapterPages = estimatePages(chapter.wordCount);
+            runningPages += chapterPages;
             const displayCount = showRunningTotals ? runningTotal : chapter.wordCount;
-            const displayPages = estimatePages(displayCount);
+            const displayPages = showRunningTotals
+                ? (chapterNewPage ? runningPages : estimatePages(runningTotal))
+                : chapterPages;
             const percentage = ((displayCount / results.totalWords) * 100).toFixed(1);
             const tr = document.createElement('tr');
 
