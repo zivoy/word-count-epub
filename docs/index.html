@@ -105,7 +105,13 @@
                     </div>
                     <div class="summary-item">
                         <span class="label" id="pages-label">Pages</span>
-                        <span class="value" id="total-pages">0</span>
+                        <button class="value value-button" id="total-pages" type="button"
+                            aria-label="Adjust words per page">0</button>
+                        <div class="hidden wpm-control" id="pages-control">
+                            <label for="pages-input">Words/Page</label>
+                            <input type="number" id="pages-input" min="100" max="1000" step="10" value="275">
+                            <button id="pages-apply" class="btn-link" type="button">Apply</button>
+                        </div>
                     </div>
                     <div class="summary-item">
                         <span class="label" id="reading-time-label">Reading Time (250 wpm)</span>

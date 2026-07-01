@@ -26,6 +26,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const wpmControl = document.getElementById('wpm-control');
     const wpmInput = document.getElementById('wpm-input');
     const wpmApply = document.getElementById('wpm-apply');
+    const totalPagesEl = document.getElementById('total-pages');
+    const pagesControl = document.getElementById('pages-control');
+    const pagesInput = document.getElementById('pages-input');
+    const pagesApply = document.getElementById('pages-apply');
 
     // library: [{ file, results?, error? }, ...] — populated by handleFiles,
     // survives library ⇄ detail navigation so back-button restores the table.
@@ -39,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let includeExtras = false;
     let showLibraryFilenames = false;
 
-    pagesLabel.innerHTML = `Pages <span class="nowrap">(${words_per_page} words/page)</span>`;
+    updatePagesLabel();
 
     dropZone.addEventListener('click', () => fileInput.click());
 
@@ -137,6 +141,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    totalPagesEl.addEventListener('click', () => {
+        pagesControl.classList.toggle('hidden');
+        if (!pagesControl.classList.contains('hidden')) {
+            pagesInput.focus();
+            pagesInput.select();
+        }
+    });
+
+    pagesApply.addEventListener('click', () => {
+        const nextValue = Number.parseInt(pagesInput.value, 10);
+        if (!Number.isFinite(nextValue) || nextValue <= 0) {
+            return;
+        }
+        words_per_page = Math.min(Math.max(nextValue, 100), 1000);
+        pagesInput.value = words_per_page;
+        updatePagesLabel();
+        if (currentResults) {
+            updateSummary(currentResults, false);
+            renderTable(currentResults);
+        }
+        pagesControl.classList.add('hidden');
+    });
+
+    pagesInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            pagesApply.click();
+        }
+    });
+
     function showUploadView() {
         fileInput.value = '';
         resultsSection.classList.add('hidden');
@@ -144,6 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadSection.classList.remove('hidden');
         progressBar.style.width = '0%';
         wpmControl.classList.add('hidden');
+        pagesControl.classList.add('hidden');
         cameFromLibrary = false;
         // Leave library/baseResults intact so forward-nav still works.
     }
@@ -366,6 +400,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function estimatePages(words) {
         return Math.ceil(words / words_per_page);
+    }
+
+    function updatePagesLabel() {
+        pagesLabel.innerHTML = `Pages <span class="nowrap">(${words_per_page} words/page)</span>`;
     }
 
     function escapeHtml(s) {
