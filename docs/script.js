@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let includeExtras = false;
     let showLibraryFilenames = false;
 
-    pagesLabel.textContent = `Pages (${words_per_page} words/page)`;
+    pagesLabel.innerHTML = `Pages <span class="nowrap">(${words_per_page} words/page)</span>`;
 
     dropZone.addEventListener('click', () => fileInput.click());
 
@@ -355,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateReadingTime() {
         if (!currentResults) return;
         readingTimeEl.textContent = formatReadingTime(Math.ceil(currentResults.totalWords / wpm));
-        readingTimeLabel.textContent = `Reading Time (${wpm} wpm)`;
+        readingTimeLabel.innerHTML = `Reading Time <span class="nowrap">(${wpm} wpm)</span>`;
     }
 
     function formatReadingTime(minutes) {

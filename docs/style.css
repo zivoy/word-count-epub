@@ -224,6 +224,10 @@ h1 {
     color: var(--text-primary);
 }
 
+.label .nowrap {
+    white-space: nowrap;
+}
+
 .value-button {
     background: transparent;
     border: none;
